@@ -347,10 +347,21 @@ if st.button("Cargar Desktop"):
 renderer = st.session_state.get("renderer")
 
 if renderer:
-    max_desk = st.slider(
-        "Máximo de imágenes Desktop a analizar con IA",
-        5, min(50, max(5, len(renderer["image_urls"]))), min(20, max(5, len(renderer["image_urls"]))), 1
-    )
+    image_count = len(renderer["image_urls"])
+    if image_count == 0:
+        st.warning("El renderer no expuso imágenes analizables.")
+        max_desk = 0
+    elif image_count == 1:
+        max_desk = 1
+        st.info("Desktop: 1 imagen detectada para análisis.")
+    else:
+        max_desk = st.slider(
+            "Máximo de imágenes Desktop a analizar con IA",
+            min_value=1,
+            max_value=min(50, image_count),
+            value=min(20, image_count),
+            step=1
+        )
     with st.expander("Ver imágenes Desktop detectadas"):
         urls = renderer["image_urls"][:max_desk]
         cols = st.columns(4)
