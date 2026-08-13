@@ -6,4 +6,6 @@ beautifulsoup4
 opencv-python-headless
 Pillow
 rapidfuzz
-openai
+pytesseract
+ImageHash
+numpy
