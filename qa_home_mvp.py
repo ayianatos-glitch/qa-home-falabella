@@ -98,7 +98,27 @@ def renderer_imgs(url):
 
 @st.cache_data(ttl=300,show_spinner=False)
 def dl(url):
-    r=requests.get(url,timeout=25,headers={"User-Agent":"Mozilla/5.0"});r.raise_for_status();return r.content
+    r=requests.get(url,timeout=25,headers={"User-Agent":"Mozilla/5.0"})
+    r.raise_for_status()
+    raw = r.content
+
+    # Validate/normalize image bytes before sending them to Streamlit/PIL.
+    try:
+        im = Image.open(io.BytesIO(raw))
+        im.load()
+    except Exception:
+        raise ValueError("La URL no devolvió una imagen compatible")
+
+    # Convert formats such as AVIF/WEBP/GIF/etc. to a safe PNG/JPEG payload.
+    if im.mode not in ("RGB", "RGBA"):
+        im = im.convert("RGBA" if "A" in im.getbands() else "RGB")
+
+    buf = io.BytesIO()
+    if im.mode == "RGBA":
+        im.save(buf, format="PNG")
+    else:
+        im.save(buf, format="JPEG", quality=92)
+    return buf.getvalue()
 
 @st.cache_data(show_spinner=False)
 def frames(video_bytes,suffix,every=1.5,maxn=30):
@@ -138,11 +158,15 @@ if st.button("Preparar Desktop"):
     if url:
         try:
             urls=renderer_imgs(url)
+            skipped = 0
             for i,u in enumerate(urls[:80]):
-                try: ev.append({"source":f"Renderer #{i+1}","bytes":dl(u)})
-                except: pass
-            st.info(f"Renderer: {len(ev)} imágenes descargadas")
-        except Exception as e: st.warning(f"Renderer: {e}")
+                try:
+                    ev.append({"source":f"Renderer #{i+1}","bytes":dl(u)})
+                except Exception:
+                    skipped += 1
+            st.info(f"Renderer: {len(ev)} imágenes válidas · {skipped} recursos omitidos")
+        except Exception as e:
+            st.warning(f"Renderer: {e}")
     for f in shots or []: ev.append({"source":f.name,"bytes":f.getvalue()})
     st.session_state["desk"]=ev; st.success(f"Desktop listo: {len(ev)} evidencias")
 
@@ -150,7 +174,19 @@ desk=st.session_state.get("desk",[])
 if desk:
     with st.expander("Ver Desktop"):
         cols=st.columns(4)
-        for i,x in enumerate(desk[:40]): cols[i%4].image(x["bytes"],caption=x["source"],use_container_width=True)
+        shown_count = 0
+        for x in desk[:40]:
+            try:
+                cols[shown_count % 4].image(
+                    x["bytes"],
+                    caption=x["source"],
+                    use_container_width=True
+                )
+                shown_count += 1
+            except Exception:
+                continue
+        if shown_count == 0:
+            st.warning("No pude mostrar imágenes compatibles de Desktop.")
 
 st.subheader("3. App — Video")
 video=st.file_uploader("Sube video App",type=["mp4","mov","m4v"])
